@@ -2,6 +2,7 @@ import argparse
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 from PIL import Image, ImageDraw, ImageFont
 
 ## pre process for txt file 
@@ -88,7 +89,7 @@ def process_txt_to_image(input_filename):
     print("图像已保存为: " + output_filename)
 
 # read excel file context
-def process_excel_to_image(input_filename):
+def process_excel_to_image(input_filename, opr):
 
     df = pd.read_excel(input_filename, skiprows=11) 
     # 读取Excel数据
@@ -97,25 +98,37 @@ def process_excel_to_image(input_filename):
     # 提取数据列
     x_values = df['X']
     y_values = df['Y']
-    rdson_values = df['Vth_RT (V)']
+    operation_list = ['Rdson_RT (Ω)', 'Vth_RT (V)', 'Igss_RT (A)', 'Idss_RT (A)']
+    rdson_values = df[operation_list[int(opr)]]
 
-    # 绘制散点图
-    plt.figure(figsize=(8, 6))
-    plt.scatter(x_values, y_values, c=rdson_values, cmap='viridis', s=50, marker='o')
+    rdson_norm = Normalize(vmin=min(rdson_values), vmax=max(rdson_values))
+
+    # 创建子图
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    for x, y, rdson in zip(x_values, y_values, rdson_values):
+        rect = plt.Rectangle((x - 0.5, y - 0.5), 1, 1, linewidth=1, edgecolor='black', facecolor=plt.cm.viridis(rdson_norm(rdson)))
+        ax.add_patch(rect)
 
     # 添加颜色标注
-    cbar = plt.colorbar()
+    sm = plt.cm.ScalarMappable(cmap='viridis', norm=plt.Normalize(vmin=min(rdson_values), vmax=max(rdson_values)))
+    sm.set_array([])  # 设置一个空的数组，仅为了绘制颜色标注
+    cbar = plt.colorbar(sm, ax=ax)
     cbar.set_label('Rdson_RT  (Ω)')
 
+    # 设置坐标轴范围
+    ax.set_xlim(min(x_values) - 0.5, max(x_values) + 0.5)
+    ax.set_ylim(min(y_values) - 0.5, max(y_values) + 0.5)
+
     # 添加标题和坐标轴标签
-    plt.title('Scatter Plot of Rdson_RT')
+    plt.title('Rectangles Plot of Rdson_RT')
     plt.xlabel('X')
     plt.ylabel('Y')
 
     # 保存图像
-    print(input_filename)
     output_filename = input_filename.replace('excel', 'png')
-    output_filename = output_filename.replace('xlsx', 'png')
+    output_filename = output_filename.replace('xlsx', 'png') 
+    output_filename = output_filename.replace('.png', operation_list[int(opr)]+'.png') 
     plt.savefig(output_filename)
     print("图像已保存为: " + output_filename)
 
@@ -127,11 +140,12 @@ def main():
     group.add_argument("-m", type=int, choices=[1, 2], help="Mode: 1 for convert txt to png, 2 for convert excel to png")
 
     parser.add_argument("-i", help="Path to the folder containing txt files.")
-    parser.add_argument("-o", help="Path to the folder to save png files.")
+    parser.add_argument("-o", help="dump diff value to png(0-Rdson_RT (Ω); 1-Vth_RT (V); 2-Igss_RT (A); 3-Idss_RT (A)).")
 
     
     args = parser.parse_args()
     txt_path = args.i
+    operation = args.o
     input_filename = os.listdir(txt_path)
 
     mode = args.m
@@ -144,8 +158,7 @@ def main():
     elif mode == 2:
         for file_name in input_filename:
             absolute_path = os.path.join(txt_path, file_name)
-            process_excel_to_image(txt_path + "/" + file_name)
-        print("TODO.............")
+            process_excel_to_image(txt_path + "/" + file_name, operation)
 
 if __name__ == "__main__":
     main()
