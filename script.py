@@ -4,6 +4,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+import re
+
+## ========================== process txt files ===================================
 
 ## pre process for txt file 
 def pre_process_for_txt_file(file_path):
@@ -22,7 +26,7 @@ def pre_process_for_txt_file(file_path):
             modified_line = line.replace(' ', '.')
             file.write(modified_line)
 
-# 读取文本文件内容
+# read txt file content
 def process_txt_to_image(input_filename):
     with open(input_filename, 'r') as f:
         lines = f.readlines()
@@ -84,17 +88,28 @@ def process_txt_to_image(input_filename):
                 y += 40
 
     # 保存图像
-    output_filename = input_filename.replace('txt', 'png')
-    image.save(output_filename)
+    output_filename = re.sub(r'(?i)txt', 'png_txt', input_filename)
+    image.save(output_filename + '.png')
     print("图像已保存为: " + output_filename)
 
+# for subfolder of txt
+def process_txt_folder(sub_folder):
+    txt_files = [f for f in os.listdir(sub_folder) if (f.endswith('.TXT') or f.endswith('.txt'))]
+    output_subfolder = re.sub(r'(?i)txt', 'png_txt', sub_folder)
+    if not os.path.exists(output_subfolder):
+        os.makedirs(output_subfolder)
+    for file_name in txt_files:
+            absolute_path = os.path.join(sub_folder, file_name)
+            pre_process_for_txt_file(sub_folder + "/" + file_name)
+            process_txt_to_image(sub_folder + "/" + file_name)
+
+## ========================== process excel files ===================================
 # read excel file context
 def process_excel_to_image(input_filename, opr):
 
-    df = pd.read_excel(input_filename, skiprows=11) 
     # 读取Excel数据
-    df = pd.read_excel(input_filename)
-
+    df = pd.read_excel(input_filename, skiprows=11) 
+    
     # 提取数据列
     x_values = df['X']
     y_values = df['Y']
@@ -126,39 +141,108 @@ def process_excel_to_image(input_filename, opr):
     plt.ylabel('Y')
 
     # 保存图像
-    output_filename = input_filename.replace('excel', 'png')
+    output_filename = input_filename.replace('excel', 'png_excel')
     output_filename = output_filename.replace('xlsx', 'png') 
     output_filename = output_filename.replace('.png', operation_list[int(opr)]+'.png') 
     plt.savefig(output_filename)
     print("图像已保存为: " + output_filename)
 
+def process_excel_folder(sub_folder, options):
+    excel_files = [f for f in os.listdir(sub_folder) if f.endswith('.xlsx')]
+    output_subfolder = re.sub(r'(?i)excel', 'png_excel', sub_folder)
+    if not os.path.exists(output_subfolder):
+        os.makedirs(output_subfolder)
+    for file_name in excel_files:
+            absolute_path = os.path.join(sub_folder, file_name)
+            if options and options < 4:
+                process_excel_to_image(sub_folder + "/" + file_name, options)
+            else:
+                for i in range(4):
+                    process_excel_to_image(sub_folder + "/" + file_name, i)
 
+## ========================== draw txt files' scatter png===================================
+# read txt wafer id && good die value
+def extract_data_from_txt(txt_file):
+    with open(txt_file, 'r') as f:
+        content = f.read()
+        wafer_id_match = re.search(r'.*wafer[\s.]*id.*[\s.]*(\d+)', content, re.IGNORECASE)
+        good_die_match = re.search(r'.*good[\s.]*die.*[\s.]*(\d+)', content, re.IGNORECASE)
+        pass_match = re.search(r'.*total[\s.]*pass.*[\s.]*(\d+)', content, re.IGNORECASE)
+        if wafer_id_match:
+            wafer_id = int(wafer_id_match.group(1))
+        if good_die_match:
+            good_die = int(good_die_match.group(1))
+        if pass_match:
+            good_die = int(pass_match.group(1))
+        return wafer_id, good_die
+    return None, None
+
+# draw point png for wafer id && good die
+def generate_scatter_plot(data_folder):
+    txt_files = [f for f in os.listdir(data_folder) if (f.endswith('.TXT') or f.endswith('.txt'))]
+    wafer_ids = []
+    good_dies = []
+    for txt_file in txt_files:
+        wafer_id, good_die = extract_data_from_txt(os.path.join(data_folder, txt_file))
+        if wafer_id is not None and good_die is not None:
+            wafer_ids.append(int(wafer_id))
+            good_dies.append(int(good_die))
+
+    plt.scatter(wafer_ids, good_dies)
+    plt.xlabel('Wafer ID')
+    plt.ylabel('Good Die')
+    plt.title('Scatter Plot')
+
+    plt.xticks(range(min(wafer_ids), max(wafer_ids) + 1))
+    plt.yticks(range(min(good_dies), max(good_dies) + 1))
+
+    plt.grid(True)
+    
+    plot_name = os.path.basename(data_folder) + '.png'
+
+    output_folder = re.sub(r'(?i)txt', 'png_txt', data_folder)
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    plt.savefig(output_folder + '/Scatter_Plot' + plot_name)
+    plt.close()
+
+
+## ========================== main function ===================================
 def main():
     parser = argparse.ArgumentParser(description="Convert test file to image")
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-m", type=int, choices=[1, 2], help="Mode: 1 for convert txt to png, 2 for convert excel to png")
+    group.add_argument("-m", type=int, choices=[1, 2,3], help="Mode: 1 for convert txt to png, 2 for convert excel to png, 3 for draw point draw for txt folder")
 
     parser.add_argument("-i", help="Path to the folder containing txt files.")
     parser.add_argument("-o", help="dump diff value to png(0-Rdson_RT (Ω); 1-Vth_RT (V); 2-Igss_RT (A); 3-Idss_RT (A)).")
 
     
     args = parser.parse_args()
-    txt_path = args.i
-    operation = args.o
-    input_filename = os.listdir(txt_path)
-
+    # parse get
+    input_path = args.i
+    option = args.o
     mode = args.m
 
     if mode == 1:
-        for file_name in input_filename:
-            absolute_path = os.path.join(txt_path, file_name)
-            pre_process_for_txt_file(txt_path + "/" + file_name)
-            process_txt_to_image(txt_path + "/" + file_name)
+        ## read txt file && draw png
+        subfolders = [f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))]
+        for subfolder in subfolders:
+                subfolder_path = os.path.join(input_path, subfolder)
+                process_txt_folder(subfolder_path)
     elif mode == 2:
-        for file_name in input_filename:
-            absolute_path = os.path.join(txt_path, file_name)
-            process_excel_to_image(txt_path + "/" + file_name, operation)
+        ## read excel file && draw png
+        subfolders = [f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))]
+        for subfolder in subfolders:
+            subfolder_path = os.path.join(input_path, subfolder)
+            process_excel_folder(subfolder_path, option)
+        
+    elif mode ==3:
+            ## read txt folder && draw poinit png
+            subfolders = [f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))]
+            for subfolder in subfolders:
+                subfolder_path = os.path.join(input_path, subfolder)
+                generate_scatter_plot(subfolder_path)
 
 if __name__ == "__main__":
     main()
