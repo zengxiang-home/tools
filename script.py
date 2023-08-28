@@ -165,9 +165,9 @@ def process_excel_folder(sub_folder, options):
 def extract_data_from_txt(txt_file):
     with open(txt_file, 'r') as f:
         content = f.read()
-        wafer_id_match = re.search(r'.*wafer[\s.]*id.*[\s.]*(\d+)', content, re.IGNORECASE)
-        good_die_match = re.search(r'.*good[\s.]*die.*[\s.]*(\d+)', content, re.IGNORECASE)
-        pass_match = re.search(r'.*total[\s.]*pass.*[\s.]*(\d+)', content, re.IGNORECASE)
+        wafer_id_match = re.search(r'.*wafer.*id.*\b(\d+)\b', content, re.IGNORECASE)
+        good_die_match = re.search(r'.*good[\s.]*die.*[\s.]*\b(\d+)\b', content, re.IGNORECASE)
+        pass_match = re.search(r'.*total[\s.]*pass.*[\s.]*\b(\d+)\b', content, re.IGNORECASE)
         if wafer_id_match:
             wafer_id = int(wafer_id_match.group(1))
         if good_die_match:
@@ -177,8 +177,8 @@ def extract_data_from_txt(txt_file):
         return wafer_id, good_die
     return None, None
 
-# draw point png for wafer id && good die
-def generate_scatter_plot(data_folder):
+# draw point png for wafer id && good die of subfolders
+def generate_subfolder_scatter_plot(data_folder):
     txt_files = [f for f in os.listdir(data_folder) if (f.endswith('.TXT') or f.endswith('.txt'))]
     wafer_ids = []
     good_dies = []
@@ -206,6 +206,49 @@ def generate_scatter_plot(data_folder):
     plt.savefig(output_folder + '/Scatter_Plot' + plot_name)
     plt.close()
 
+    return sum(good_dies) / len(good_dies)
+
+# draw scatter plot
+def generate_scatter_plot(input_path):
+    FA_lod = []
+    FA_good_dies = []
+    CE_lod = []
+    CE_good_dies = []
+    LELGT_lod = []
+    LELGT_good_dies = []
+    S1_lod = []
+    S1_good_dies = []
+    subfolders = [f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))]
+    for subfolder in subfolders:
+        subfolder_path = os.path.join(input_path, subfolder)
+        average_good_die = generate_subfolder_scatter_plot(subfolder_path)
+        if subfolder.startswith("FA"):
+            FA_lod.append(subfolder)
+            FA_good_dies.append(average_good_die)
+        elif subfolder.startswith("CE"):
+            CE_lod.append(subfolder)
+            CE_good_dies.append(average_good_die)
+        elif subfolder.startswith("LELGT"):
+            LELGT_lod.append(subfolder)
+            LELGT_good_dies.append(average_good_die)
+        elif subfolder.startswith("S1"):
+            S1_lod.append(subfolder)
+            S1_good_dies.append(average_good_die)
+
+    output_path = re.sub(r'(?i)txt', 'png_txt', input_path)
+    for com_name in ["FA", "CE", "LELGT", "S1"]:
+        plt.figure(figsize=(8, 14))  # 调整图像大小
+        lod_array = locals()[com_name+"_lod"]
+        good_die_array = locals()[com_name+"_good_dies"]
+        plt.scatter(lod_array, good_die_array, color='blue', marker='o')
+        plt.xticks(rotation=45, ha='right')
+
+        # 添加标题、轴标签和图例
+        plt.title('Scatter Plot with Character X-Axis and Numeric Y-Axis')
+        plt.xlabel('Characters')
+        plt.ylabel('Values')
+
+        plt.savefig(output_path + "/" + com_name + ".png")
 
 ## ========================== main function ===================================
 def main():
@@ -239,10 +282,7 @@ def main():
         
     elif mode ==3:
             ## read txt folder && draw poinit png
-            subfolders = [f for f in os.listdir(input_path) if os.path.isdir(os.path.join(input_path, f))]
-            for subfolder in subfolders:
-                subfolder_path = os.path.join(input_path, subfolder)
-                generate_scatter_plot(subfolder_path)
+            generate_scatter_plot(input_path)
 
 if __name__ == "__main__":
     main()
