@@ -165,11 +165,15 @@ def process_excel_folder(sub_folder, options):
 def extract_data_from_txt(txt_file):
     with open(txt_file, 'r') as f:
         content = f.read()
-        wafer_id_match = re.search(r'.*wafer.*id.*\b(\d+)\b', content, re.IGNORECASE)
+        wafer_id_match = re.search(r'.*wafer.*id.*\b(\w+)\b', content, re.IGNORECASE)
         good_die_match = re.search(r'.*good[\s.]*die.*[\s.]*\b(\d+)\b', content, re.IGNORECASE)
         pass_match = re.search(r'.*total[\s.]*pass.*[\s.]*\b(\d+)\b', content, re.IGNORECASE)
         if wafer_id_match:
-            wafer_id = int(wafer_id_match.group(1))
+            if wafer_id_match.group(1).isdigit():
+                wafer_id = int(wafer_id_match.group(1))
+            else:
+                matches = re.findall(r'(\d+)', wafer_id_match.group(1))
+                wafer_id = matches[-1]
         if good_die_match:
             good_die = int(good_die_match.group(1))
         if pass_match:
